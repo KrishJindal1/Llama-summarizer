@@ -1,51 +1,179 @@
 import streamlit as st
 import ollama
-
+from pypdf import PdfReader
 
 # Added dictionary to store the temperature and instructions for each tone option
 tone_config = {
-
     "Professional": {
         
         "instruction": "Use polished, professional, business-oriented language."
     },
-
     "Formal": {
         
         "instruction": "Use formal vocabulary, complete sentences, and a serious tone."
     },
-
     "Casual": {
         
         "instruction": "Use conversational, friendly, and approachable language."
     },
-
     "Executive": {
         
         "instruction": "Focus on key insights, decisions, outcomes, and business impact."
     },
-
     "Technical": {
         
         "instruction": "Use precise technical terminology and maintain technical accuracy."
     },
-
     "Academic": {
         
         "instruction": "Use objective, analytical, and scholarly language."
     },
-
     "Marketing": {
        
         "instruction": "Make the content engaging, persuasive, and audience-focused."
     },
-
     "Simple English": {
         
         "instruction": "Use simple words, short sentences, and explain concepts clearly."
     }
 }
    
+
+
+# Function to analyze the document, generate summary and rewrite based on the selected tone and rewrite target
+def analyze_document(document_text):
+    with st.status("📄 Processing Document...", expanded=True) as status:
+
+        st.write("Generating summary...")
+        
+        # Call the Ollama API to get the summary or rewrite based on the user's choice
+        try:
+            summary_response = ollama.chat(
+                model=selected_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert document analyst."
+                    },
+                    {
+                        "role": "user",
+                        #prompt for better summarized content.
+                        "content": f"""
+                            Generate a summary.
+
+                                Target Length:
+                                    {target_length} 
+
+                                Requirements:
+                                - Capture all key points.
+                                - Preserve important facts.
+                                - Do not omit critical information.
+                                - Use clear headings where appropriate.
+                                - Do not leave the summary unfinished.
+                                
+                                Document:
+                                {document_text}
+                                """
+                    }
+                ],
+                options={
+                    "temperature": 0.2,
+                    "num_predict": 2000 # set a high token limit to avoid the summary being cut off due to token limits.
+                }
+            )
+        except Exception as e:
+            st.error(f"Summary Generation Failed: {e}")
+            return
+        summary = summary_response["message"]["content"]
+        st.success("Summary generated")
+
+        st.write("Generating rewritten content...")
+        config = tone_config[tone]
+        instruction = config["instruction"]
+
+        
+        try:#Api call to rewrite the content based on the selected tone and rewrite target 
+            rewrite_response = ollama.chat(
+                model=selected_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert content rewriter."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"""
+                            You are an expert editor.
+
+                            Task:
+                                Rewrite the content using a {tone} tone.
+
+                            Tone Guidelines:
+                                {instruction}
+
+                                Requirements:
+                                - Preserve all important information.
+                                - Do not change factual content.
+                                - Improve readability and organization.
+                                - Keep the rewritten version approximately the same length.
+                                - Use headings or bullet points when appropriate.
+                                - Do not leave the rewritten version unfinished.
+                                
+
+                            Content:
+                            {summary if rewrite_target == "Summary" else document_text}
+                            """
+                    }
+                ],
+                options={
+                    "temperature": temperature,
+                }
+            )
+        except Exception as e:
+            st.error(f"Rewriting Failed: {e}")
+            return
+        rewritten_text = rewrite_response["message"]["content"]
+        st.success("Rewritten text generated")
+
+        status.update(
+            label="✅ Analysis Complete",
+            state="complete",
+        )
+
+        # Display the summary and rewritten text in separate tabs
+    sum_tab1, rewrite_tab2 = st.tabs(["📄 Summary", "✍️ Rewritten"])
+    with sum_tab1:
+            st.subheader("📄 Summary")
+            st.write(summary)
+    with rewrite_tab2:
+            st.subheader("✍️ Rewritten Text")
+            st.write(rewritten_text)
+
+# Function to extract text from PDF files
+def extract_pdf(uploaded_file):
+   try:
+     text = ""
+     reader = PdfReader(uploaded_file)
+     for page in reader.pages:
+         page_text = page.extract_text()
+         if page_text:
+             text += page_text + "\n"
+     return text
+   except Exception as e:
+        st.error(f"PDF Extraction Failed: {e}")
+        return ""
+
+# Function to show the preview of the extracted text from the uploaded document
+def show_preview(document_text):
+   try:
+    st.text_area(
+        "Preview",
+        document_text[:2000],
+        height=200
+    )
+   except Exception as e:
+        st.error(f"Preview Generation Failed: {e}") 
+
 
 # side bar 
 with st.sidebar:
@@ -133,118 +261,10 @@ with tab1:
             st.warning("Please enter a document.")
         
         else:
-            with st.status("📄 Processing Document...", expanded=True) as status:
-
-                st.write("Generating summary...")
-        
-
-        # Call the Ollama API to get the summary or rewrite based on the user's choice
-                summary_response = ollama.chat(
-                        model=selected_model,
-                    
-                    messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert document analyst."
-                },
-                {
-                    "role": "user",
-                    #prompt for better summarized content.
-                    "content": f"""
-                        Generate a summary.
-
-                            Target Length:
-                                {target_length} 
-
-                            Requirements:
-                            - Capture all key points.
-                            - Preserve important facts.
-                            - Do not omit critical information.
-                            - Use clear headings where appropriate.
-                            - Do not leave the summary unfinished.
-                            
-                            Document:
-                            {document_text}
-                            """
-                                }
-            ],
-                    options={
-                        "temperature": 0.2,
-                        "num_predict": 2000 # set a high token limit to avoid the summary being cut off due to token limits.
-                    }
-            )
-
-                summary = summary_response["message"]["content"]
-                st.success("Summary generated")
-
-                
-                
-                st.write("Generating rewritten content...")
-                config = tone_config[tone]
-                instruction = config["instruction"]
+            analyze_document(document_text)
 
 
-                #Api call to rewrite the content based on the selected tone and rewrite target 
-                rewrite_response = ollama.chat(
-                    model=selected_model,
-                    messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert content rewriter."
-                    },
-
-                    {
-                        "role": "user",
-                        "content": f"""
-                            You are an expert editor.
-
-                            Task:
-                                Rewrite the content using a {tone} tone.
-
-                            Tone Guidelines:
-                                {instruction}
-
-                                Requirements:
-                                - Preserve all important information.
-                                - Do not change factual content.
-                                - Improve readability and organization.
-                                - Keep the rewritten version approximately the same length.
-                                - Use headings or bullet points when appropriate.
-                                - Do not leave the rewritten version unfinished.
-                                
-
-                            Content:
-                            {summary if rewrite_target == "Summary" else document_text}
-                            """
-                    }
-                ],
-                    options={
-                        "temperature": temperature,
-                    }
-            )
-
-                rewritten_text = rewrite_response["message"]["content"]
-                st.success("Rewritten text generated")
-
-                status.update(
-                            label="✅ Analysis Complete",
-                            state="complete",
-                            
-                        )
-
-
-
-            # Display the summary and rewritten text in separate tabs
-            sum_tab1, rewrite_tab2 = st.tabs(["📄 Summary", "✍️ Rewritten"])
-            with sum_tab1:
-                    st.subheader("📄 Summary")
-                    st.write(summary)
-            with rewrite_tab2:
-                    st.subheader("✍️ Rewritten Text")
-                    st.write(rewritten_text)
-
-
-
+#File uploader to upload the document to be analyzed 
 with tab2:
      uploaded_file = st.file_uploader(
         "Upload a document",
@@ -256,14 +276,72 @@ with tab2:
     )
      #Analyze_Upload Button Logic
      if analyze_upload:
+
         if not uploaded_file:
+
             st.warning("Please upload a document.")
-        
+
         else:
-           with st.container(border=True):
 
-            st.success("Document uploaded successfully ✅")
+            try:
+                st.success("Document uploaded successfully ✅")
+                with st.expander("📄 Document Details"):
 
-            st.write(f"📄 File Name: {uploaded_file.name}")
-            st.write(f"📁 File Type: {uploaded_file.type}")
-            st.write(f"📊 Size: {uploaded_file.size / 1024:.2f} KB")
+                    st.success("Document uploaded successfully ✅")
+
+                    st.write(f"📄 File Name: {uploaded_file.name}")
+                    st.write(f"📁 File Type: {uploaded_file.type}")
+                    st.write(
+                        f"📊 Size: {uploaded_file.size / 1024:.2f} KB"
+                    )
+
+                file_name = uploaded_file.name.lower()
+            #For each file type, extract the text and then show the preview and analyze the document based on the extracted text.
+                if file_name.endswith(".txt"):
+                    document_text = (
+                        uploaded_file
+                        .read()
+                        .decode("utf-8")
+                    )
+                    st.success(
+                        "Text extracted successfully ✅"
+                    )
+                    show_preview(document_text)
+                    analyze_document(document_text)
+
+
+                elif file_name.endswith(".pdf"):
+                     document_text = extract_pdf(uploaded_file)
+                     st.success(
+                        "PDF extracted successfully ✅"
+                    )
+                     show_preview(document_text)
+                     analyze_document(document_text)
+                     
+
+
+                elif file_name.endswith(".docx"):
+
+                    st.info(
+                        "DOCX extraction coming next."
+                    )
+
+
+                elif file_name.endswith(".pptx"):
+
+                    st.info(
+                        "PPTX extraction coming next."
+                    )
+
+
+                else:
+
+                    st.error(
+                        "Unsupported file type."
+                    )
+
+            except Exception as e:
+
+                st.error(
+                    f"Error reading file: {e}"
+                )
