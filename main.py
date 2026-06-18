@@ -62,7 +62,7 @@ def analyze_document(document_text,selected_model,temperature,tone,rewrite_targe
                         "content": f"""
                             Generate a summary.
 
-                                Target Length:
+                                Target Lengths:
                                     {target_length} 
 
                                 Requirements:
@@ -78,7 +78,7 @@ def analyze_document(document_text,selected_model,temperature,tone,rewrite_targe
                     }
                 ],
                 options={
-                    "temperature": 0.2,
+                    "temperature": 1,
                     "num_predict": 2000 # set a high token limit to avoid the summary being cut off due to token limits.
                 }
             )
@@ -203,7 +203,7 @@ def show_preview(document_text):
         st.error(f"Preview Generation Failed: {e}") 
 
 # Function to process the extracted text, show the preview and analyze the document based on the extracted text
-def process_extracted_text(document_text, file_type):
+def process_extracted_text(document_text, file_type,selected_model, temperature, tone, rewrite_target, target_length):
     if document_text.strip():
         st.success(
             f"{file_type} extracted successfully ✅"
@@ -215,157 +215,166 @@ def process_extracted_text(document_text, file_type):
             f"No text extracted from {file_type}"
         )
 
-
-# side bar 
-with st.sidebar:
-    st.title('🦙💬 Llama summarizer')
-    
-    models = ollama.list()
-# To choose all the models present in the ollama list and show them in the dropdown menu
-    model_names = [
-        model.model
-        for model in models.models
-]
-    selected_model = st.selectbox("Choose Model",model_names)
-
-
-    # To choose the temperature and show it in the slider
-    temperature = st.slider("Temperature",0.0,1.0,0.7)
+def app():
+    # side bar 
+    with st.sidebar:
+        st.title('🦙💬 Llama summarizer')
+        
+        models = ollama.list()
+    # To choose all the models present in the ollama list and show them in the dropdown menu
+        model_names = [
+            model.model
+            for model in models.models
+    ]
+        selected_model = st.selectbox("Choose Model",model_names)
 
 
-    # To choose the summary length and show it in the dropdown menu
-    st.subheader("Summary Settings")
-
-    summary_size = st.selectbox(
-        "Summary Length",
-        ["Short", "Medium", "Long"]
-    )
-    summary_config = {
-    "Short": "100-200 words",
-    "Medium": "300-500 words",
-    "Long": "700-1000 words"
-}
-    target_length = summary_config[summary_size] # select max lenght based on words count  to avoid the summary being cut off due to token limits.
+        # To choose the temperature and show it in the slider
+        temperature = st.slider("Temperature",0.0,1.0,0.7)
 
 
+        # To choose the summary length and show it in the dropdown menu
+        st.subheader("Summary Settings")
 
-    # To choose the rewrite tone and show it in the dropdown menu
-    tone = st.selectbox(
-        "Rewrite Tone",
+        summary_size = st.selectbox(
+            "Summary Length",
+            ["Short", "Medium", "Long"]
+        )
+        summary_config = {
+        "Short": "100-200 words",
+        "Medium": "300-500 words",
+        "Long": "700-1000 words"
+    }
+        target_length = summary_config[summary_size] # select max lenght based on words count  to avoid the summary being cut off due to token limits.
+
+
+
+        # To choose the rewrite tone and show it in the dropdown menu
+        tone = st.selectbox(
+            "Rewrite Tone",
+            [
+                "Professional",
+                "Formal",
+                "Casual",
+                "Executive",
+                "Technical",
+                "Academic",
+                "Marketing",
+                "Simple English"
+            ]
+        )
+
+        rewrite_target = st.selectbox(
+        "Rewrite",
         [
-            "Professional",
-            "Formal",
-            "Casual",
-            "Executive",
-            "Technical",
-            "Academic",
-            "Marketing",
-            "Simple English"
+            "Summary",
+            "Full Document"
         ]
     )
+        
 
-    rewrite_target = st.selectbox(
-    "Rewrite",
-    [
-        "Summary",
-        "Full Document"
-    ]
-)
+
+
+
+    # Main app
+    st.title("📄 AI Document Analyzer")
+
+    tab1, tab2 = st.tabs(
+        ["📝 Text Document", "📂 Upload Document"]
+    )
+
+    with tab1:
+    #Text Box to paste the document to be analyzed
+        document_text = st.text_area(
+        "Paste your text here:",
+        height=300,
+        placeholder="Enter the text you want to summarize or rewrite."
+    )
+
+
+        # Button to trigger the analysis
+        analyze_button = st.button("Analyze Document")
+        #analyze_button Logic
+        if analyze_button:
+            if not document_text.strip():
+                st.warning("Please enter a document.")
+            
+            else:
+                analyze_document(document_text,selected_model,temperature,tone,rewrite_target,target_length)
+
+
+    #File uploader to upload the document to be analyzed 
+    with tab2:
+        uploaded_file = st.file_uploader(
+            "Upload a document",
+            type=["pdf", "docx", "pptx", "txt"]
+        )
+        # Button to trigger the analysis of the uploaded document
+        analyze_upload = st.button(
+            "Analyze Uploaded Document"
+        )
+        #Analyze_Upload Button Logic
+        if analyze_upload:
+
+            if not uploaded_file:
+
+                st.warning("Please upload a document.")
+
+            else:
+
+                try:
+                    st.success("Document uploaded successfully ✅")
+                    with st.expander("📄 Document Details"):
+                        st.write(f"📄 File Name: {uploaded_file.name}")
+                        st.write(f"📁 File Type: {uploaded_file.type}")
+                        st.write(
+                            f"📊 Size: {uploaded_file.size / 1024:.2f} KB"
+                        )
+
+                    file_name = uploaded_file.name.lower()
+                #For each file type, extract the text and then show the preview and analyze the document based on the extracted text.
+                    if file_name.endswith(".txt"):#for .txt
+                        document_text = (
+                            uploaded_file
+                            .read()
+                            .decode("utf-8")
+                        )
+                        process_extracted_text(document_text, "Text", selected_model,temperature,tone,rewrite_target,target_length)
     
 
 
+                    elif file_name.endswith(".pdf"): #for .pdf
+                        document_text = extract_pdf(uploaded_file)
+                        process_extracted_text(document_text, "PDF", selected_model,temperature,tone,rewrite_target,target_length)
+                                                                                    
+                        
 
 
-# Main app
-st.title("📄 AI Document Analyzer")
-
-tab1, tab2 = st.tabs(
-    ["📝 Text Document", "📂 Upload Document"]
-)
-
-with tab1:
-#Text Box to paste the document to be analyzed
-    document_text = st.text_area(
-    "Paste your text here:",
-    height=300,
-    placeholder="Enter the text you want to summarize or rewrite."
-)
+                    elif file_name.endswith(".docx"):#for .docx
+                        document_text = extract_docx(uploaded_file)
+                        process_extracted_text(document_text, "DOCX", selected_model,temperature,tone,rewrite_target,target_length)
+                                                                                    
 
 
-    # Button to trigger the analysis
-    analyze_button = st.button("Analyze Document")
-    #analyze_button Logic
-    if analyze_button:
-        if not document_text.strip():
-            st.warning("Please enter a document.")
-        
-        else:
-            analyze_document(document_text,selected_model,temperature,tone,rewrite_target,target_length)
+                    elif file_name.endswith(".pptx"):#for .pptx
+                        document_text = extract_pptx(uploaded_file)
+                        process_extracted_text(document_text, "PPTX", selected_model,temperature,tone,rewrite_target,target_length)
+                                                                                    
 
 
-#File uploader to upload the document to be analyzed 
-with tab2:
-     uploaded_file = st.file_uploader(
-        "Upload a document",
-        type=["pdf", "docx", "pptx", "txt"]
-    )
-    # Button to trigger the analysis of the uploaded document
-     analyze_upload = st.button(
-        "Analyze Uploaded Document"
-    )
-     #Analyze_Upload Button Logic
-     if analyze_upload:
+                    else:
 
-        if not uploaded_file:
+                        st.error(
+                            "Unsupported file type."
+                        )
 
-            st.warning("Please upload a document.")
-
-        else:
-
-            try:
-                st.success("Document uploaded successfully ✅")
-                with st.expander("📄 Document Details"):
-                    st.write(f"📄 File Name: {uploaded_file.name}")
-                    st.write(f"📁 File Type: {uploaded_file.type}")
-                    st.write(
-                        f"📊 Size: {uploaded_file.size / 1024:.2f} KB"
-                    )
-
-                file_name = uploaded_file.name.lower()
-            #For each file type, extract the text and then show the preview and analyze the document based on the extracted text.
-                if file_name.endswith(".txt"):#for .txt
-                    document_text = (
-                        uploaded_file
-                        .read()
-                        .decode("utf-8")
-                    )
-                    process_extracted_text(document_text, "Text")
-
-
-                elif file_name.endswith(".pdf"): #for .pdf
-                     document_text = extract_pdf(uploaded_file)
-                     process_extracted_text(document_text, "PDF")
-                     
-
-
-                elif file_name.endswith(".docx"):#for .docx
-                    document_text = extract_docx(uploaded_file)
-                    process_extracted_text(document_text, "DOCX")
-
-
-                elif file_name.endswith(".pptx"):#for .pptx
-                    document_text = extract_pptx(uploaded_file)
-                    process_extracted_text(document_text, "PPTX")
-
-
-                else:
+                except Exception as e:
 
                     st.error(
-                        "Unsupported file type."
+                        f"Error reading file: {e}"
                     )
 
-            except Exception as e:
 
-                st.error(
-                    f"Error reading file: {e}"
-                )
+
+if __name__ == "__main__":
+    app()
