@@ -73,7 +73,7 @@ def generate_summary(document_text, target_length, selected_model):
                     }
                 ],
                 options={
-                    "temperature": 1,
+                    "temperature": 0.2,
                     "num_predict": 2000 # set a high token limit to avoid the summary being cut off due to token limits.
                 }
             )
