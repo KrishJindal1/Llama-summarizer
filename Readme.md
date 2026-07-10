@@ -20,9 +20,9 @@ This project was developed as part of a GenAI Internship Project.
 
 ### AI-Powered Summarization
 
-* Short Summary (100–200 words)
-* Medium Summary (300–500 words)
-* Long Summary (700–1000 words)
+* Short Summary (100–120 words)
+* Medium Summary (120–300 words)
+* Long Summary (400–1000 words)
 * Preservation of key information and critical insights
 
 ### Content Rewriting
